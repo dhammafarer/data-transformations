@@ -38,13 +38,19 @@ const roundVal = R.compose(
 
 const merger = R.mergeWithKey((k,l,r) => k == 'value' ? R.mean([l,r]) : r);
 
-let res = R.compose(
+let aggregate = R.compose(
   R.map(R.compose(
     R.evolve({value: roundVal}),
     R.reduce(merger, {})
   )),
   R.splitEvery(6),
   R.path(['0', 'power'])
-)(data);
+);
 
-console.log(res);
+let res = R.set(
+  R.lensPath(['1', 'power']),
+  aggregate(data),
+  data
+);
+
+console.log(res[1]);
