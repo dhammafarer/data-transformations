@@ -8,13 +8,13 @@ const data = [
   {type: 'battery', capacity: 1000 },
 ];
 
-const dates = [{date:"01"}, {date:"02"}, {date:"03"}, {date:"04"}];
+const dates = [{date:"01:00"}, {date:"02:00"}, {date:"03:00"}, {date:"04:00"}];
 
 const expected = [
-  {date:"01", pv:  0, pvControl:  0, load: 30, base: 30},
-  {date:"02", pv: 20, pvControl: 10, load: 70, base: 40},
-  {date:"03", pv: 60, pvControl: 20, load: 50, base: 30},
-  {date:"04", pv:  0, pvControl: 10, load: 30, base: 20}
+  {date: "01:00", pv:  0, load: 30,  pvControl:  0, base: 30, buffer:   0},
+  {date: "02:00", pv: 20, load: 70,  pvControl: 10, base: 40, buffer:  10},
+  {date: "03:00", pv: 60, load: 50,  pvControl: 20, base: 30, buffer:  40},
+  {date: "04:00", pv:  0, load: 30,  pvControl: 10, base: 20, buffer: -10}
 ];
 
 const vc = (idx, i) => data[idx].variation[i] * data[idx].capacity;
@@ -67,10 +67,29 @@ const getBase = last => R.chain(
   )
 );
 
+const getBatteryBuffer = R.chain(
+  R.merge,
+  R.compose(
+    R.objOf('buffer'),
+    R.reduceRight(R.subtract, 0),
+    R.props(['pv', 'pvControl'])
+  )
+);
+
+const getBatteryStorage = R.chain(
+  R.merge,
+  R.compose(
+    R.objOf('battery'),
+    R.reduceRight(R.subtract, 0),
+    R.props(['pv', 'pvControl'])
+  )
+);
+
 const f = (acc, val, i) => {
   return R.append(
     R.merge(R.compose(
       getBase(R.last(acc)),
+      getBatteryBuffer,
       getPVcontrol(R.last(acc)),
       getPV(i),
       getLoad(i)
