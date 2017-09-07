@@ -1,9 +1,14 @@
 const R = require('ramda');
 const assert = require('assert');
 
+const powerData = {
+  'defaultLoad': [0.3, 0.7, 0.5, 0.3],
+  'pv'         : [0.0, 0.2, 0.6, 0.0]
+};
+
 const data = [
-  {type: 'load', capacity: 100, variation: [0.3, 0.7, 0.5, 0.3]},
-  {type: 'pv', capacity: 100, ramp: 0.1, variation: [0.0, 0.2, 0.6, 0.0]},
+  {type: 'load', capacity: 100, variation: 'defaultLoad'},
+  {type: 'pv', capacity: 100, ramp: 0.1, variation: 'pv'},
   {type: 'base', capacity: 100, ramp: 0.1, base: 0.3},
   {type: 'battery', capacity: 1000 },
 ];
@@ -16,8 +21,8 @@ const expected = [
 ];
 
 const dataNoBat= [
-  {type: 'load', capacity: 100, variation: [0.3, 0.7, 0.5, 0.3]},
-  {type: 'pv', capacity: 100, ramp: 0.1, variation: [0.0, 0.2, 0.6, 0.0]},
+  {type: 'load', capacity: 100, variation: 'defaultLoad'},
+  {type: 'pv', capacity: 100, ramp: 0.1, variation: 'pv'},
   {type: 'base', capacity: 100, ramp: 0.1, base: 0.3}
 ];
 
@@ -28,7 +33,7 @@ const expectedNoBat = [
   {date: "04:00", pv:  0, load: 30,  pvControl:  0, base: 30, buffer:  0, storage: 0}
 ];
 
-function computeOutput (xs) {
+function computeOutput (powerData, xs) {
   const data = R.zipObj(R.pluck('type', xs), xs);
   const DATES = [{date:"01:00"}, {date:"02:00"}, {date:"03:00"}, {date:"04:00"}];
   const PV_RAMP = data.pv.capacity * data.pv.ramp;
@@ -36,24 +41,36 @@ function computeOutput (xs) {
   const BASE = data.base.capacity * data.base.base;
   const NO_BATT = R.isNil(data.battery);
 
-  const vc = (type, i) => data[type].variation[i] * data[type].capacity;
+  const vc = (type, i) => powerData[data[type].variation][i] * data[type].capacity;
 
   const getLoad = i => R.assoc('load', vc('load', i));
 
   const getPV = i => R.assoc('pv', vc('pv', i));
 
-  const checkRamp = (r, x) => R.compose(R.gte(r), R.compose(Math.abs, R.subtract(x)));
+  const checkRamp = (r, x) => R.compose(
+    R.gte(r),
+    R.compose(
+      Math.abs,
+      R.subtract(x)
+    )
+  );
 
   const computePVRamp = last => R.ifElse(
     checkRamp(PV_RAMP, last.pvControl),
     R.identity,
-    R.clamp(R.subtract(last.pvControl, PV_RAMP), R.add(last.pvControl, PV_RAMP))
+    R.clamp(
+      R.subtract(last.pvControl, PV_RAMP),
+      R.add(last.pvControl, PV_RAMP)
+    )
   );
 
   const computeBaseRamp = last => R.ifElse(
     checkRamp(BASE_RAMP, last.base),
     R.identity,
-    R.clamp(R.subtract(last.base, BASE_RAMP), R.add(last.base, BASE_RAMP))
+    R.clamp(
+      R.subtract(last.base, BASE_RAMP),
+      R.add(last.base, BASE_RAMP)
+    )
   );
 
   const setBaseRamp = last => R.ifElse(
@@ -67,7 +84,12 @@ function computeOutput (xs) {
     R.compose(
       R.objOf('pvControl'),
       R.ifElse(
-        R.always(R.or(NO_BATT, R.isNil(R.path(['pvControl'], last)))),
+        R.always(
+          R.or(
+            NO_BATT,
+            R.isNil(R.path(['pvControl'], last))
+          )
+        ),
         R.identity,
         (x) => computePVRamp(last)(x)
       ),
@@ -80,7 +102,11 @@ function computeOutput (xs) {
     R.compose(
       R.objOf('base'),
       setBaseRamp(last),
-      R.ifElse(R.gt(BASE), R.always(BASE), R.identity),
+      R.ifElse(
+        R.gt(BASE),
+        R.always(BASE),
+        R.identity
+      ),
       R.reduceRight(R.subtract, 0),
       R.props(['load', 'pvControl'])
     )
@@ -126,8 +152,8 @@ function computeOutput (xs) {
   return R.addIndex(R.reduce)(f, [], DATES);
 }
 
-const res = computeOutput(data);
-const resNoBat = computeOutput(dataNoBat);
+const res = computeOutput(powerData, data);
+const resNoBat = computeOutput(powerData, dataNoBat);
 
 assert.deepEqual(res, expected, '***BATTERY***');
 assert.deepEqual(resNoBat, expectedNoBat, '***NO BATTERY***');
