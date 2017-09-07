@@ -7,15 +7,15 @@ const data = [
   {type: 'base', capacity: 100, ramp: 0.1, base: 0.3},
   {type: 'battery', capacity: 1000 },
 ];
-const dates = [{date:"01"}, {date:"02"}, {date:"03"}, {date:"04"}];
-const expected = [
-  {date:"01", load: 30, pv: 0, pvControl: 0},
-  {date:"02", load: 40, pv: 20, pvControl: 10},
-  {date:"03", load: 50, pv: 60, pvControl: 20},
-  {date:"04", load: 30, pv: 0, pvControl: 10}
-];
 
-const empty = [];
+const dates = [{date:"01"}, {date:"02"}, {date:"03"}, {date:"04"}];
+
+const expected = [
+  {date:"01", pv:  0, pvControl:  0, load: 30, base: 30},
+  {date:"02", pv: 20, pvControl: 10, load: 40, base: 30},
+  {date:"03", pv: 60, pvControl: 20, load: 50, base: 30},
+  {date:"04", pv:  0, pvControl: 10, load: 30, base: 20}
+];
 
 const vc = (idx, i) => data[idx].variation[i] * data[idx].capacity;
 
@@ -50,23 +50,24 @@ const getBase = R.chain(
     R.objOf('base'),
     R.ifElse(R.gt(0), R.always(0), R.identity),
     R.reduceRight(R.subtract, 0),
-    R.props(['load', 'pv'])
+    R.props(['load', 'pvControl'])
   )
 );
 
 const f = (acc, val, i) => {
   return R.append(
     R.merge(R.compose(
+      getBase,
       getPVcontrol(R.last(acc)),
       getPV(i),
       getLoad(i)
-    )({})
-    , val),
+    )({}),
+    val),
     acc
   );
 };
 
-let res = R.addIndex(R.reduce)(f, empty, dates);
+let res = R.addIndex(R.reduce)(f, [], dates);
 console.log(res);
 
 assert.deepEqual(res, expected);
