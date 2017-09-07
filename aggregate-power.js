@@ -14,7 +14,7 @@ const expected = [
   {date: "01:00", pv:  0, load: 30,  pvControl:  0, base: 30, buffer:   0, storage:   0},
   {date: "02:00", pv: 20, load: 70,  pvControl: 10, base: 40, buffer:  10, storage: -20},
   {date: "03:00", pv: 60, load: 50,  pvControl: 20, base: 30, buffer:  40, storage:   0},
-  {date: "04:00", pv:  0, load: 30,  pvControl: 10, base: 20, buffer: -10, storage:   0}
+  {date: "04:00", pv:  0, load: 30,  pvControl: 10, base: 30, buffer: -10, storage:  10}
 ];
 
 const vc = (idx, i) => data[idx].variation[i] * data[idx].capacity;
@@ -61,7 +61,7 @@ const getBase = last => R.chain(
   R.compose(
     R.objOf('base'),
     setBaseRamp(last),
-    R.ifElse(R.gt(0), R.always(0), R.identity),
+    R.ifElse(R.gt(30), R.always(30), R.identity),
     R.reduceRight(R.subtract, 0),
     R.props(['load', 'pvControl'])
   )
