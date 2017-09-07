@@ -17,10 +17,10 @@ const data = [
 ];
 
 const expected = [
-  {date: "01:00", pv:  Just(0), load: Just(30), pvControl: Just(0)},
-  {date: "02:00", pv: Just(20), load: Just(70), pvControl: Just(10)},
-  {date: "03:00", pv: Just(60), load: Just(50), pvControl: Just(20)},
-  {date: "04:00", pv:  Just(0), load: Just(30), pvControl: Just(10)}
+  {date: "01:00", pv:  Just(0), load: Just(30), pvControl: Just(0), base: Just(30)},
+  {date: "02:00", pv: Just(20), load: Just(70), pvControl: Just(10), base: Just(40)},
+  {date: "03:00", pv: Just(60), load: Just(50), pvControl: Just(20), base: Just(30)},
+  {date: "04:00", pv:  Just(0), load: Just(30), pvControl: Just(10), base: Just(20)}
 ];
 
 function computeOutput (powerData, xs) {
@@ -75,7 +75,7 @@ function computeOutput (powerData, xs) {
   );
 
   // Integer -> Integer -> Integer -> Integer
-  const computePVRamp = ramp => lastVal => x => R.ifElse(
+  const computeRamp = ramp => lastVal => x => R.ifElse(
     checkRamp(ramp, lastVal),
     R.identity,
     R.clamp(
@@ -93,12 +93,47 @@ function computeOutput (powerData, xs) {
         R.always(S.isNothing(last)),
         R.identity,
         (x) => S.lift3(
-          computePVRamp,
+          computeRamp,
           PV_RAMP,
           R.chain(R.prop('pvControl'), last),
-          x)
+          x
+        )
       ),
       R.prop('pv')
+    )
+  );
+
+  const getB = last => R.chain(
+    R.merge,
+    R.compose(
+      R.objOf('base'),
+      setBaseRamp(last),
+      R.ifElse(
+        R.gt(BASE),
+        R.always(BASE),
+        R.identity
+      ),
+      R.reduceRight(R.subtract, 0),
+      R.props(['load', 'pvControl'])
+    )
+  );
+
+  const getBase = last => R.chain(
+    R.merge,
+    R.compose(
+      R.objOf('base'),
+      R.ifElse(
+        R.always(S.isNothing(last)),
+        R.identity,
+        (x) => S.lift3(
+          computeRamp,
+          PV_RAMP,
+          R.chain(R.prop('base'), last),
+          x
+        )
+      ),
+      R.compose(S.map(R.reduceRight(R.subtract, 0)), S.sequence(S.Maybe)),
+      R.props(['load', 'pvControl'])
     )
   );
 
@@ -106,6 +141,7 @@ function computeOutput (powerData, xs) {
     return R.append(
       R.merge(R.compose(
         R.tap(console.log),
+        getBase(S.last(acc)),
         getPVcontrol(S.last(acc)),
         getPV(i),
         getLoad(i)
