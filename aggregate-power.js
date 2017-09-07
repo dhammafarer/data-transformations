@@ -1,12 +1,18 @@
 const R = require('ramda');
-
-const dates = [{date:"01"}, {date:"02"}, {date:"03"}, {date:"04"}];
+const assert = require('assert');
 
 const data = [
   {type: 'load', capacity: 100, variation: [0.3, 0.4, 0.5, 0.3]},
   {type: 'pv', capacity: 100, ramp: 0.1, variation: [0.0, 0.2, 0.6, 0.0]},
   {type: 'base', capacity: 100, ramp: 0.1, base: 0.3},
   {type: 'battery', capacity: 1000 },
+];
+const dates = [{date:"01"}, {date:"02"}, {date:"03"}, {date:"04"}];
+const expected = [
+  {date:"01", load: 30, pv: 0, base: 30},
+  {date:"02", load: 40, pv: 20, base: 20},
+  {date:"03", load: 50, pv: 60, base: 0},
+  {date:"04", load: 30, pv: 0, base: 30}
 ];
 
 const empty = [];
@@ -37,4 +43,4 @@ const f = (acc, val, i) => {
 
 let res = R.addIndex(R.reduce)(f, empty, dates);
 
-console.log(res);
+assert.deepEqual(res, expected);

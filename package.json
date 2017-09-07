@@ -11,5 +11,8 @@
   "license": "ISC",
   "dependencies": {
     "ramda": "^0.24.1"
+  },
+  "devDependencies": {
+    "nodemon": "^1.12.0"
   }
 }
