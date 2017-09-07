@@ -9,16 +9,41 @@ const data = [
 ];
 const dates = [{date:"01"}, {date:"02"}, {date:"03"}, {date:"04"}];
 const expected = [
-  {date:"01", load: 30, pv: 0, base: 30},
-  {date:"02", load: 40, pv: 20, base: 20},
-  {date:"03", load: 50, pv: 60, base: 0},
-  {date:"04", load: 30, pv: 0, base: 30}
+  {date:"01", load: 30, pv: 0, pvControl: 0},
+  {date:"02", load: 40, pv: 20, pvControl: 10},
+  {date:"03", load: 50, pv: 60, pvControl: 20},
+  {date:"04", load: 30, pv: 0, pvControl: 10}
 ];
 
 const empty = [];
+
 const vc = (idx, i) => data[idx].variation[i] * data[idx].capacity;
-const getLoad = i => R.assoc('load', vc(0,i))
-const getPV = i => R.assoc('pv', vc(1,i))
+
+const getLoad = i => R.assoc('load', vc(0,i));
+
+const getPV = i => R.assoc('pv', vc(1,i));
+
+const checkRamp = (r,x) => R.compose(R.gte(r), R.compose(Math.abs, R.subtract(x)));
+
+const computeRamp = last => R.ifElse(
+  checkRamp(10, last.pvControl),
+  R.identity,
+  R.clamp(R.subtract(last.pvControl, 10), R.add(last.pvControl, 10))
+);
+
+const getPVcontrol = (last) => R.chain(
+  R.merge,
+  R.compose(
+    R.objOf('pvControl'),
+    R.ifElse(
+      R.always(R.isNil(R.path(['pvControl'], last))),
+      R.identity,
+      (x) => computeRamp(last)(x)
+    ),
+    R.prop('pv')
+  )
+);
+
 const getBase = R.chain(
   R.merge,
   R.compose(
@@ -32,7 +57,7 @@ const getBase = R.chain(
 const f = (acc, val, i) => {
   return R.append(
     R.merge(R.compose(
-      getBase,
+      getPVcontrol(R.last(acc)),
       getPV(i),
       getLoad(i)
     )({})
@@ -42,5 +67,6 @@ const f = (acc, val, i) => {
 };
 
 let res = R.addIndex(R.reduce)(f, empty, dates);
+console.log(res);
 
 assert.deepEqual(res, expected);
