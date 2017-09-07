@@ -10,7 +10,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "ramda": "^0.24.1"
+    "ramda": "^0.24.1",
+    "sanctuary": "^0.13.2"
   },
   "devDependencies": {
     "nodemon": "^1.12.0"
