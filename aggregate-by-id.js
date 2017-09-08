@@ -59,7 +59,7 @@ function computeOutput () {
     return R.compose(
       p => ({
         power: p,
-        control: R.isNil(last) ? 0 : computeRamp(10, last.variable[idx].control, p)
+        control: (R.isNil(last) || R.isEmpty(hash.battery)) ? p : computeRamp(10, last.variable[idx].control, p)
       }),
       R.always(x.capacity * powerData[x.variation][i])
     )(x);
