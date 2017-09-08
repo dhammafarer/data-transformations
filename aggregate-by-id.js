@@ -21,14 +21,16 @@ const powerData = {
   'solar' :         [0.0, 0.2, 0.6, 0.0]
 };
 
-// Object -> [a] -> [b]
-function computeOutput (powerData, data) {
+const dates = [{date: "01:00"}, {date: "02:00"}, {date: "03:00"}, {date: "04:00"}];
+
+// Object -> [a] -> [b] -> [c]
+function computeOutput (powerData, dates, data) {
 
   // [String]
   const TYPES = ['load', 'variable', 'base', 'battery'];
 
   // [Object]
-  const DATES = [{date: "01:00"}, {date: "02:00"}, {date: "03:00"}, {date: "04:00"}];
+  const DATES = dates;
 
   // Object
   const HASH = R.zipObj(
@@ -194,6 +196,6 @@ function computeOutput (powerData, data) {
   return R.addIndex(R.reduce)(f, [], DATES);
 }
 
-const res = computeOutput(powerData, data);
+const res = computeOutput(powerData, dates, data);
 
 assert.deepEqual(res, expected);
