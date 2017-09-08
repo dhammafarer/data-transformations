@@ -19,17 +19,17 @@ const expected = {
   load: [{power: 70}],
   variable: [{power: 10, raw: 20}],
   base: [{power: 40}],
-  battery: {
+  battery: [{
     buffer: 10,
     storage: -20
-  }
+  }]
 };
 
 function computeOutput (powerData, data) {
 
   const TYPES = ['load', 'variable', 'base', 'battery'];
   const DATES = [{date:"01:00"}, {date:"02:00"}, {date:"03:00"}, {date:"04:00"}];
-  const hash = R.zipObj(
+  const HASH = R.zipObj(
     TYPES,
     S.map(
       R.compose(
@@ -44,7 +44,7 @@ function computeOutput (powerData, data) {
         x => ({
           power: x.capacity * powerData[x.variation][i],
         }),
-        hash.load
+        HASH.load
       )
     );
   };
@@ -70,7 +70,7 @@ function computeOutput (powerData, data) {
     return R.compose(
       p => ({
         raw: p,
-        power: (R.isNil(last) || R.isEmpty(R.filter(R.prop('buffer'), hash.battery))) ? p : computeRamp(gen.ramp * gen.capacity, last.variable[idx].power, p)
+        power: (R.isNil(last) || R.isEmpty(R.filter(R.prop('buffer'), HASH.battery))) ? p : computeRamp(gen.ramp * gen.capacity, last.variable[idx].power, p)
       }),
       R.always(gen.capacity * powerData[gen.variation][i])
     )(gen);
@@ -80,14 +80,24 @@ function computeOutput (powerData, data) {
     return R.assoc('variable',
       R.addIndex(R.map)(
         (x, idx) => variableObject(x, idx, i, last),
-        hash.variable
+        HASH.variable
       )
     );
   };
 
   const getBuffer = R.chain(
-    R.assocPath(['battery', 'buffer']),
+    R.assoc('battery'),
     R.compose(
+      load => R.map(
+        R.compose(
+          R.objOf('buffer'),
+          R.ifElse(
+            R.prop('buffer'),
+            R.always(load),
+            R.always(0)
+          )
+        ), HASH.battery
+      ),
       R.sum,
       R.map(
         R.compose(
@@ -100,8 +110,19 @@ function computeOutput (powerData, data) {
   );
 
   const getStorage = R.chain(
-    R.assocPath(['battery', 'storage']),
+    R.evolve,
     R.compose(
+      x => ({battery: R.zipWith(R.merge(x))}),
+      load => R.map(
+        R.compose(
+          R.objOf('storage'),
+          R.ifElse(
+            R.prop('storage'),
+            R.always(load),
+            R.always(0)
+          )
+        ), HASH.battery
+      ),
       ([v, b, l]) => (v + b) - l,
       R.map(
         R.compose(
@@ -131,9 +152,9 @@ function computeOutput (powerData, data) {
           ),
           R.always(gen.base * gen.capacity)
         )(load),
-        hash.base
+        HASH.base
       ),
-      R.divide(R.__, hash.base.length),
+      R.divide(R.__, HASH.base.length),
       R.reduceRight(R.subtract, 0),
       R.map(
         R.compose(
@@ -163,5 +184,5 @@ function computeOutput (powerData, data) {
 }
 
 const res = computeOutput(powerData, data);
-console.log(res[1].battery.storage);
+console.log(R.pluck('battery')(res));
 assert.deepEqual(res[1], expected);
