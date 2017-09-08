@@ -9,20 +9,16 @@ const data = [
   {id: 3, category: 'battery', type: 'battery', buffer: true, storage: true}
 ];
 
+const expected = [
+  { date: "01:00", load: [{power: 30}], variable: [{power: 00, raw:  0}], base: [{power: 30}], battery: [{buffer:   0, storage:   0 }] },
+  { date: "02:00", load: [{power: 70}], variable: [{power: 10, raw: 20}], base: [{power: 40}], battery: [{buffer:  10, storage: -20 }] },
+  { date: "03:00", load: [{power: 50}], variable: [{power: 20, raw: 60}], base: [{power: 30}], battery: [{buffer:  40, storage:   0 }] },
+  { date: "04:00", load: [{power: 30}], variable: [{power: 10, raw:  0}], base: [{power: 30}], battery: [{buffer: -10, storage:  10 }] }
+];
+
 const powerData = {
   'defaultLoad':    [0.3, 0.7, 0.5, 0.3],
   'solar' :         [0.0, 0.2, 0.6, 0.0]
-};
-
-const expected = {
-  date: "02:00",
-  load: [{power: 70}],
-  variable: [{power: 10, raw: 20}],
-  base: [{power: 40}],
-  battery: [{
-    buffer: 10,
-    storage: -20
-  }]
 };
 
 function computeOutput (powerData, data) {
@@ -31,19 +27,32 @@ function computeOutput (powerData, data) {
   const DATES = [{date:"01:00"}, {date:"02:00"}, {date:"03:00"}, {date:"04:00"}];
   const HASH = R.zipObj(
     TYPES,
-    S.map(
+    R.map(
       R.compose(
-        S.flip(S.filter)(data),
+        R.flip(S.filter)(data),
         R.propEq('type')
-      ), TYPES)
+      ),
+      TYPES)
   );
+
+  const f = (acc, val, i) => {
+    return R.append(
+      R.merge(R.compose(
+        getStorage,
+        getBase(R.last(acc)),
+        getBuffer,
+        getVariable(i, R.last(acc)),
+        getLoad(i)
+      )({}),
+      val),
+      acc
+    );
+  };
 
   const getLoad = i => {
     return R.assoc('load',
       R.map(
-        x => ({
-          power: x.capacity * powerData[x.variation][i],
-        }),
+        x => ({power: x.capacity * powerData[x.variation][i]}),
         HASH.load
       )
     );
@@ -112,7 +121,7 @@ function computeOutput (powerData, data) {
   const getStorage = R.chain(
     R.evolve,
     R.compose(
-      x => ({battery: R.zipWith(R.merge(x))}),
+      x => ({battery: R.zipWith(R.merge, x)}),
       load => R.map(
         R.compose(
           R.objOf('storage'),
@@ -121,7 +130,8 @@ function computeOutput (powerData, data) {
             R.always(load),
             R.always(0)
           )
-        ), HASH.battery
+        ),
+        HASH.battery
       ),
       ([v, b, l]) => (v + b) - l,
       R.map(
@@ -166,23 +176,9 @@ function computeOutput (powerData, data) {
     )
   );
 
-  const f = (acc, val, i) => {
-    return R.append(
-      R.merge(R.compose(
-        getStorage,
-        getBase(R.last(acc)),
-        getBuffer,
-        getVariable(i, R.last(acc)),
-        getLoad(i)
-      )({}),
-      val),
-      acc
-    );
-  };
-
   return R.addIndex(R.reduce)(f, [], DATES);
 }
 
 const res = computeOutput(powerData, data);
-console.log(R.pluck('battery')(res));
-assert.deepEqual(res[1], expected);
+
+assert.deepEqual(res, expected);
