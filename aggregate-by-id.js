@@ -6,7 +6,7 @@ const data = [
   {id: 0, category: 'consumer',  capacity: 100, type: 'load', variation: 'defaultLoad'},
   {id: 1, category: 'generator', capacity: 100, type: 'variable', ramp: 0.1, variation: 'solar'},
   {id: 2, category: 'generator', capacity: 100, type: 'base', ramp: 0.1, base: 0.3},
-  {id: 3, category: 'battery', type: 'battery'}
+  {id: 3, category: 'battery', type: 'battery', buffer: true, storage: true}
 ];
 
 const powerData = {
@@ -70,7 +70,7 @@ function computeOutput (powerData, data) {
     return R.compose(
       p => ({
         raw: p,
-        power: (R.isNil(last) || R.isEmpty(hash.battery)) ? p : computeRamp(gen.ramp * gen.capacity, last.variable[idx].power, p)
+        power: (R.isNil(last) || R.isEmpty(R.filter(R.prop('buffer'), hash.battery))) ? p : computeRamp(gen.ramp * gen.capacity, last.variable[idx].power, p)
       }),
       R.always(gen.capacity * powerData[gen.variation][i])
     )(gen);
@@ -163,4 +163,5 @@ function computeOutput (powerData, data) {
 }
 
 const res = computeOutput(powerData, data);
+console.log(res[1].battery.storage);
 assert.deepEqual(res[1], expected);
