@@ -1,32 +1,43 @@
 const R = require('ramda');
 const S = require('sanctuary');
+const assert = require('assert');
 
 const data = [
   {id: 0, category: 'consumer',  capacity: 100, type: 'load', variation: 'defaultLoad'},
-  {id: 1, category: 'consumer',  capacity: 100, type: 'load', variation: 'defaultLoad'},
-  {id: 2, category: 'generator', capacity: 100, type: 'variable', ramp: 0.1, variation: 'solar'},
-  {id: 3, category: 'generator', capacity: 100, type: 'base', ramp: 0.1, base: 0.3},
-  {id: 4, category: 'battery', type: 'battery'}
+  {id: 1, category: 'generator', capacity: 100, type: 'variable', ramp: 0.1, variation: 'solar'},
+  {id: 2, category: 'generator', capacity: 100, type: 'base', ramp: 0.1, base: 0.3},
+  {id: 3, category: 'battery', type: 'battery'}
 ];
-
-const TYPES = ['load', 'variable', 'base', 'battery'];
-const DATES = [{date:"01:00"}, {date:"02:00"}, {date:"03:00"}, {date:"04:00"}];
 
 const powerData = {
   'defaultLoad':    [0.3, 0.7, 0.5, 0.3],
   'solar' :         [0.0, 0.2, 0.6, 0.0]
 };
 
-const hash = R.zipObj(
-  TYPES,
-  S.map(
-    R.compose(
-      S.flip(S.filter)(data),
-      R.propEq('type')
-    ), TYPES)
-);
+const expected = {
+  date: "02:00",
+  load: [{power: 70}],
+  variable: [{power: 10, raw: 20}],
+  base: [{power: 40}],
+  battery: {
+    buffer: 10,
+    storage: -20
+  }
+};
 
-function computeOutput () {
+function computeOutput (powerData, data) {
+
+  const TYPES = ['load', 'variable', 'base', 'battery'];
+  const DATES = [{date:"01:00"}, {date:"02:00"}, {date:"03:00"}, {date:"04:00"}];
+  const hash = R.zipObj(
+    TYPES,
+    S.map(
+      R.compose(
+        S.flip(S.filter)(data),
+        R.propEq('type')
+      ), TYPES)
+  );
+
   const getLoad = i => {
     return R.assoc('load',
       R.map(
@@ -55,14 +66,14 @@ function computeOutput () {
     )
   )(x);
 
-  const variableObject = (x, idx, i, last) => {
+  const variableObject = (gen, idx, i, last) => {
     return R.compose(
       p => ({
-        power: p,
-        control: (R.isNil(last) || R.isEmpty(hash.battery)) ? p : computeRamp(10, last.variable[idx].control, p)
+        raw: p,
+        power: (R.isNil(last) || R.isEmpty(hash.battery)) ? p : computeRamp(gen.ramp * gen.capacity, last.variable[idx].power, p)
       }),
-      R.always(x.capacity * powerData[x.variation][i])
-    )(x);
+      R.always(gen.capacity * powerData[gen.variation][i])
+    )(gen);
   };
 
   const getVariable = (i, last) => {
@@ -74,29 +85,55 @@ function computeOutput () {
     );
   };
 
-  const getBuffer = last => R.chain(
-    R.merge,
+  const getBuffer = R.chain(
+    R.assocPath(['battery', 'buffer']),
     R.compose(
-      R.objOf('battery'),
-      //R.tap(console.log),
-      R.ifElse(
-        R.always(R.isNil(last)),
-        R.map(R.always(0)),
-        R.addIndex(R.map)(
-          (x, i) => {
-            console.log('last', last.variable[i].power);
-            return computeRamp(10, last.variable[i].power, x.power);
-          }
+      R.sum,
+      R.map(
+        R.compose(
+          R.reduceRight(R.subtract, 0),
+          R.values
         )
       ),
       R.prop('variable')
     )
   );
 
-  const getBase = last => R.chain(
-    R.merge,
+  const getStorage = R.chain(
+    R.assocPath(['battery', 'storage']),
     R.compose(
-      R.objOf('base'),
+      ([v, b, l]) => (v + b) - l,
+      R.map(
+        R.compose(
+          R.sum,
+          R.pluck('power')
+        )
+      ),
+      R.props(['variable', 'base', 'load'])
+    )
+  );
+
+  const getBase = last => R.chain(
+    R.assoc('base'),
+    R.compose(
+      load => R.addIndex(R.map)(
+        (gen, idx) => R.compose(
+          R.objOf('power'),
+          R.ifElse(
+            R.always(R.isNil(last)),
+            R.identity,
+            x => computeRamp(gen.ramp * gen.capacity, last.base[idx].power, x)
+          ),
+          R.ifElse(
+            R.lt(load),
+            R.identity,
+            R.always(load)
+          ),
+          R.always(gen.base * gen.capacity)
+        )(load),
+        hash.base
+      ),
+      R.divide(R.__, hash.base.length),
       R.reduceRight(R.subtract, 0),
       R.map(
         R.compose(
@@ -111,6 +148,9 @@ function computeOutput () {
   const f = (acc, val, i) => {
     return R.append(
       R.merge(R.compose(
+        getStorage,
+        getBase(R.last(acc)),
+        getBuffer,
         getVariable(i, R.last(acc)),
         getLoad(i)
       )({}),
@@ -122,4 +162,5 @@ function computeOutput () {
   return R.addIndex(R.reduce)(f, [], DATES);
 }
 
-console.log(R.pluck('variable', computeOutput()));
+const res = computeOutput(powerData, data);
+assert.deepEqual(res[1], expected);
