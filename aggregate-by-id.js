@@ -21,10 +21,16 @@ const powerData = {
   'solar' :         [0.0, 0.2, 0.6, 0.0]
 };
 
+// Object -> [a] -> [b]
 function computeOutput (powerData, data) {
 
+  // [String]
   const TYPES = ['load', 'variable', 'base', 'battery'];
-  const DATES = [{date:"01:00"}, {date:"02:00"}, {date:"03:00"}, {date:"04:00"}];
+
+  // [Object]
+  const DATES = [{date: "01:00"}, {date: "02:00"}, {date: "03:00"}, {date: "04:00"}];
+
+  // Object
   const HASH = R.zipObj(
     TYPES,
     R.map(
@@ -35,20 +41,22 @@ function computeOutput (powerData, data) {
       TYPES)
   );
 
-  const f = (acc, val, i) => {
-    return R.append(
-      R.merge(R.compose(
+  // (a -> b -> c -> d) -> [e]
+  const f = (acc, val, i) => R.append(
+    R.merge(
+      R.compose(
         getStorage,
         getBase(R.last(acc)),
         getBuffer,
         getVariable(i, R.last(acc)),
         getLoad(i)
       )({}),
-      val),
-      acc
-    );
-  };
+      val
+    ),
+    acc
+  );
 
+  // Integer -> (a -> b)
   const getLoad = i => {
     return R.assoc('load',
       R.map(
@@ -58,6 +66,7 @@ function computeOutput (powerData, data) {
     );
   };
 
+  // Num -> Num -> (Num -> Bool)
   const checkRamp = (r, x) => R.compose(
     R.gte(r),
     R.compose(
@@ -66,6 +75,7 @@ function computeOutput (powerData, data) {
     )
   );
 
+  // Num -> Num -> Num -> Num
   const computeRamp = (ramp, lastVal, x) => R.ifElse(
     checkRamp(ramp, lastVal),
     R.identity,
@@ -75,6 +85,7 @@ function computeOutput (powerData, data) {
     )
   )(x);
 
+  // a -> Integer -> Integer -> b -> c
   const variableObject = (gen, idx, i, last) => {
     return R.compose(
       p => ({
@@ -85,6 +96,7 @@ function computeOutput (powerData, data) {
     )(gen);
   };
 
+  // Integer -> a -> (b -> c)
   const getVariable = (i, last) => {
     return R.assoc('variable',
       R.addIndex(R.map)(
@@ -94,6 +106,7 @@ function computeOutput (powerData, data) {
     );
   };
 
+  // a -> b
   const getBuffer = R.chain(
     R.assoc('battery'),
     R.compose(
@@ -118,6 +131,7 @@ function computeOutput (powerData, data) {
     )
   );
 
+  // a -> b
   const getStorage = R.chain(
     R.evolve,
     R.compose(
@@ -144,6 +158,7 @@ function computeOutput (powerData, data) {
     )
   );
 
+  // a -> b -> c
   const getBase = last => R.chain(
     R.assoc('base'),
     R.compose(
